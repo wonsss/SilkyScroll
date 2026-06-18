@@ -1,0 +1,10 @@
+.build/
+*.o
+*.d
+AppIconSource.png
+AppIcon.iconset/
+.DS_Store
+*.icns
+.swiftpm/xcode/xcuserdata/
+.aider.*
+*.zip

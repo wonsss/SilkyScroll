@@ -1,0 +1,113 @@
+name: release
+
+# 태그(v*) 푸시 시 자동 실행: 빌드 → Developer ID 서명 → 노타라이즈 → DMG → GitHub Release
+on:
+  push:
+    tags: [ 'v*' ]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: swift --version && xcodebuild -version
+
+      # ── 인증서 임포트 ──
+      - name: Import Developer ID certificate
+        env:
+          P12_BASE64: ${{ secrets.DEVELOPER_ID_P12_BASE64 }}
+          P12_PASSWORD: ${{ secrets.DEVELOPER_ID_P12_PASSWORD }}
+        run: |
+          echo "$P12_BASE64" | base64 --decode > /tmp/cert.p12
+          security create-keychain -p ci-keychain ci.keychain
+          security default-keychain -s ci.keychain
+          security unlock-keychain -p ci-keychain ci.keychain
+          P12_PASS="${P12_PASSWORD:-}"
+          security import /tmp/cert.p12 -k ci.keychain -P "${P12_PASS}" \
+            -T /usr/bin/codesign -T /usr/bin/productbuild
+          security set-key-partition-list -S apple-tool:,apple: -s -k ci-keychain ci.keychain
+          rm -f /tmp/cert.p12
+
+      # ── App Store Connect API 키 (노타라이즈용) ──
+      - name: Setup notarytool credentials
+        env:
+          AC_API_KEY_BASE64: ${{ secrets.AC_API_KEY_BASE64 }}
+          AC_KEY_ID: ${{ secrets.AC_KEY_ID }}
+          AC_ISSUER_ID: ${{ secrets.AC_ISSUER_ID }}
+        run: |
+          mkdir -p ~/private_keys
+          echo "$AC_API_KEY_BASE64" | base64 --decode > ~/private_keys/AuthKey_${AC_KEY_ID}.p8
+          xcrun notarytool store-credentials "silkyscroll-notarize" \
+            --key ~/private_keys/AuthKey_${AC_KEY_ID}.p8 \
+            --key-id "$AC_KEY_ID" \
+            --issuer "$AC_ISSUER_ID"
+
+      # ── 빌드 ──
+      - name: Build
+        run: ./build.sh --no-install
+
+      # ── Developer ID 서명 ──
+      - name: Sign app
+        run: |
+          DEV_ID_HASH=$(security find-identity -v -p codesigning \
+            | grep "Developer ID Application" | head -1 | awk '{print $2}')
+          codesign --force --options runtime --sign "$DEV_ID_HASH" \
+            .build/release/SilkyScroll.app
+
+      # ── 노타라이즈 + staple ──
+      - name: Notarize app
+        run: |
+          ditto -c -k --keepParent .build/release/SilkyScroll.app SilkyScroll.zip
+          xcrun notarytool submit SilkyScroll.zip \
+            --keychain-profile "silkyscroll-notarize" --wait
+          xcrun stapler staple .build/release/SilkyScroll.app
+          rm SilkyScroll.zip
+
+      # ── DMG 생성 ──
+      - name: Install create-dmg
+        run: brew install create-dmg
+
+      - name: Create DMG
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          create-dmg \
+            --volname "SilkyScroll" \
+            --window-pos 200 120 --window-size 600 380 \
+            --icon-size 100 \
+            --icon "SilkyScroll.app" 160 185 \
+            --hide-extension "SilkyScroll.app" \
+            --app-drop-link 430 185 \
+            --no-internet-enable \
+            "SilkyScroll-${VERSION}.dmg" \
+            ".build/release/SilkyScroll.app"
+          DEV_ID_HASH=$(security find-identity -v -p codesigning \
+            | grep "Developer ID Application" | head -1 | awk '{print $2}')
+          codesign --force --sign "$DEV_ID_HASH" "SilkyScroll-${VERSION}.dmg"
+          xcrun notarytool submit "SilkyScroll-${VERSION}.dmg" \
+            --keychain-profile "silkyscroll-notarize" --wait
+          xcrun stapler staple "SilkyScroll-${VERSION}.dmg"
+          echo "DMG_PATH=SilkyScroll-${VERSION}.dmg" >> "$GITHUB_ENV"
+
+      # ── GitHub Release 생성 ──
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          NOTES=$(awk "/## \[${VERSION#v}\]/{found=1; next} found && /^## /{exit} found{print}" CHANGELOG.md)
+          gh release create "$VERSION" \
+            "$DMG_PATH" \
+            --title "SilkyScroll ${VERSION}" \
+            --notes "${NOTES:-See CHANGELOG.md}"
+
+      # ── 키체인 정리 ──
+      - name: Cleanup keychain
+        if: always()
+        run: |
+          security delete-keychain ci.keychain 2>/dev/null || true
+          rm -f ~/private_keys/AuthKey_*.p8
