@@ -8,3 +8,4 @@ AppIcon.iconset/
 .swiftpm/xcode/xcuserdata/
 .aider.*
 *.zip
+*.dmg
