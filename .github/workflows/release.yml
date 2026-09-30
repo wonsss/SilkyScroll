@@ -9,7 +9,26 @@ permissions:
   contents: write
 
 jobs:
+  # 로컬 scripts/release.sh 가 먼저 Release를 만든 태그는 CI 재실행 스킵
+  precheck:
+    runs-on: ubuntu-latest
+    outputs:
+      exists: ${{ steps.check.outputs.exists }}
+    steps:
+      - name: Check if release already exists
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
   release:
+    needs: precheck
+    if: needs.precheck.outputs.exists != 'true'
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4

@@ -6,7 +6,7 @@ set -e
 cd "$(dirname "$0")/.."
 
 APP_NAME="SilkyScroll"
-VERSION="1.0.0"
+VERSION="${VERSION:-1.0.0}"
 APP=".build/release/${APP_NAME}.app"
 DMG="${APP_NAME}-${VERSION}.dmg"
 

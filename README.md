@@ -19,17 +19,7 @@ macOS는 Magic Mouse/트랙패드에는 부드러운 `continuous` 스크롤을 �
 
 **[Releases 페이지](https://github.com/wonsss/SilkyScroll/releases)** 에서 최신 `SilkyScroll-x.y.z.dmg`를 다운로드하세요.
 
-DMG를 열고 `SilkyScroll.app`을 `/Applications` 폴더로 드래그하세요.
-
-### Gatekeeper 경고 해제 (Developer ID 서명/노타라이즈된 버전이 아닌 경우)
-
-macOS가 "Apple이 확인할 수 없습니다" 경고를 표시하면:
-
-```bash
-xattr -dr com.apple.quarantine /Applications/SilkyScroll.app
-```
-
-또는 Finder에서 앱을 **우클릭 → 열기** 를 선택하세요.
+DMG를 열고 `SilkyScroll.app`을 `/Applications` 폴더로 드래그하세요. 릴리즈는 Apple Developer ID 서명 + 노타라이즈되어 있어 Gatekeeper 경고 없이 바로 실행됩니다.
 
 ## 빌드 (소스에서)
 

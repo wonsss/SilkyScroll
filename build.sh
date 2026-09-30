@@ -3,7 +3,7 @@ set -e
 
 APP_NAME="SilkyScroll"
 BUNDLE_ID="io.github.wonsss.silkyscroll"
-APP_VERSION="1.0.0"
+APP_VERSION="${APP_VERSION:-1.0.0}"
 BINARY_PATH=".build/release/$APP_NAME"
 APP_BUNDLE=".build/release/$APP_NAME.app"
 
